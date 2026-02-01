@@ -84,12 +84,17 @@ function createDeleteButton(note) {
     return btn;
 }
 
+function getNormalizedURL() {
+    return window.location.origin + window.location.pathname;
+}
+
 function restoreNotes() {
-    const currentURL = window.location.href;
+    const currentURL = getNormalizedURL();
 
     chrome.storage.local.get(null, (items) => {
         Object.values(items).forEach(noteData => {
             if (noteData.url !== currentURL) return;
+            if (document.querySelector(`[data-id="${noteData.id}"]`)) return;
 
             const note = document.createElement("div");
 
@@ -138,12 +143,31 @@ function restoreNotes() {
     })
 }
 
+function cleanupNotes() {
+    const currentURL = getNormalizedURL();
+    document.querySelectorAll('[data-id][data-url]').forEach(note => {
+        if (note.dataset.url !== currentURL) {
+            note.remove();
+        }
+    });
+}
+
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", restoreNotes);
 }
 else {
     restoreNotes();
 }
+
+let lastTrackedURL = getNormalizedURL();
+setInterval(() => {
+    const currentURL = getNormalizedURL();
+    if (currentURL !== lastTrackedURL) {
+        lastTrackedURL = currentURL;
+        cleanupNotes();
+        restoreNotes();
+    }
+}, 500);
 
 let lastRightX = 0;
 let lastRightY = 0;
@@ -171,13 +195,11 @@ function saveNote(note) {
 chrome.runtime.onMessage.addListener((message, sender) => {
     if (message.type !== "ADD_STICKY_NOTE") return;
 
-    console.log("Sticky note requested at position: ", lastRightX, lastRightY);
-
     const note = document.createElement("div");
 
     const noteId = crypto.randomUUID();
     note.dataset.id = noteId;
-    note.dataset.url = message.url;
+    note.dataset.url = getNormalizedURL();
 
     note.contentEditable = true;
     note.spellcheck = false;
@@ -186,7 +208,6 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     note.style.left = `${lastRightX}px`;
     note.style.top = `${lastRightY}px`;
 
-    // Sticky note styling
     note.style.backgroundColor = "#ffeb3b";
     note.style.background = "linear-gradient(135deg, #fff9c4 0%, #ffeb3b 100%)";
     note.style.color = "#333";
@@ -217,4 +238,4 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     note.appendChild(deleteBtn);
 
     document.body.appendChild(note);
-}); 
+});
